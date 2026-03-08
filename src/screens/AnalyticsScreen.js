@@ -5,12 +5,15 @@ import {
     StyleSheet,
     ScrollView,
     RefreshControl,
-    ActivityIndicator
+    ActivityIndicator,
+    TouchableOpacity
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT_SIZES, RADIUS, SPACING, SHADOWS } from '../constants/theme';
 import { useResponsive } from '../utils/responsive';
 import api from '../services/api';
+import { getInvoices } from '../services/billingService';
+import { printReceipt58mm } from '../utils/printReceipt';
 
 export default function AnalyticsScreen() {
     const r = useResponsive();
@@ -18,14 +21,16 @@ export default function AnalyticsScreen() {
     const [monthlySales, setMonthlySales] = useState(0);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [recentSales, setRecentSales] = useState([]);
 
     const fetchAnalytics = async () => {
         try {
             // Make API calls for today and monthly sales
             // Modify these endpoints if your backend route names differ
-            const [todayRes, monthRes] = await Promise.all([
+            const [todayRes, monthRes, invoicesRes] = await Promise.all([
                 api.get('/sales/today'),
-                api.get('/sales/monthly')
+                api.get('/sales/monthly'),
+                getInvoices({ page: 1, limit: 10, sort: 'desc' })
             ]);
 
             // Safely extract the monetary value from the response
@@ -38,6 +43,9 @@ export default function AnalyticsScreen() {
 
             setTodaySales(extractValue(todayRes));
             setMonthlySales(extractValue(monthRes));
+
+            const list = invoicesRes?.invoices || invoicesRes?.data?.invoices || invoicesRes?.data || invoicesRes || [];
+            setRecentSales(Array.isArray(list) ? list : []);
         } catch (error) {
             console.log('Failed to fetch analytics:', error?.message || error);
         } finally {
@@ -104,6 +112,40 @@ export default function AnalyticsScreen() {
                         </View>
                     </View>
                 )}
+
+                {!loading && (
+                    <View style={styles.historySection}>
+                        <Text style={styles.sectionTitle}>Recent Sales History</Text>
+                        {recentSales.length > 0 ? (
+                            recentSales.map((sale, idx) => (
+                                <View key={sale._id || idx} style={styles.saleRow}>
+                                    <View style={styles.saleInfo}>
+                                        <Text style={styles.saleId}>Invoice {sale.invoice_number ? `#${sale.invoice_number}` : sale._id.slice(-6).toUpperCase()}</Text>
+                                        <Text style={styles.saleDetails}>
+                                            ₹{Number(sale.grand_total || sale.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • {String(sale.payment_method || 'CASH').toUpperCase()}
+                                        </Text>
+                                        <Text style={styles.saleTime}>
+                                            {new Date(sale.date || sale.createdAt || new Date()).toLocaleString('en-IN', {
+                                                day: '2-digit', month: 'short', year: 'numeric',
+                                                hour: '2-digit', minute: '2-digit', hour12: true
+                                            })}
+                                        </Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.printBtn}
+                                        onPress={() => printReceipt58mm(sale)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="print-outline" size={18} color={COLORS.primary} />
+                                        <Text style={styles.printBtnText}>Print</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ))
+                        ) : (
+                            <Text style={styles.emptyText}>No recent sales found.</Text>
+                        )}
+                    </View>
+                )}
             </ScrollView>
         </View>
     );
@@ -167,5 +209,66 @@ const styles = StyleSheet.create({
         fontSize: 32,
         fontWeight: '800',
         color: COLORS.textPrimary,
+    },
+    historySection: {
+        marginTop: SPACING.xxl,
+    },
+    sectionTitle: {
+        fontSize: FONT_SIZES.lg,
+        fontWeight: '700',
+        color: COLORS.textPrimary,
+        marginBottom: SPACING.lg,
+    },
+    saleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: COLORS.white,
+        padding: SPACING.lg,
+        borderRadius: RADIUS.md,
+        marginBottom: SPACING.md,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        ...SHADOWS.sm,
+    },
+    saleInfo: {
+        flex: 1,
+    },
+    saleId: {
+        fontWeight: '800',
+        fontSize: FONT_SIZES.md,
+        color: COLORS.textPrimary,
+        marginBottom: 4,
+    },
+    saleDetails: {
+        fontWeight: '700',
+        color: COLORS.success,
+        fontSize: FONT_SIZES.sm,
+        marginBottom: 4,
+    },
+    saleTime: {
+        fontSize: FONT_SIZES.xs,
+        color: COLORS.textMuted,
+        fontWeight: '500',
+    },
+    printBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: SPACING.xs,
+        backgroundColor: COLORS.primaryGhost,
+        paddingHorizontal: SPACING.md,
+        paddingVertical: SPACING.sm,
+        borderRadius: RADIUS.sm,
+    },
+    printBtnText: {
+        color: COLORS.primary,
+        fontWeight: '800',
+        fontSize: FONT_SIZES.sm,
+    },
+    emptyText: {
+        color: COLORS.textMuted,
+        fontStyle: 'italic',
+        textAlign: 'center',
+        marginTop: SPACING.xl,
     },
 });
