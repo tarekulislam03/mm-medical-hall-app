@@ -34,7 +34,6 @@ const FILTERS = [
     { key: 'expiring_soon', label: 'Expiring Soon', icon: 'time-outline' },
     { key: 'expired', label: 'Expired', icon: 'skull-outline' },
     { key: 'zero_stock', label: 'Zero Stock', icon: 'close-circle-outline' },
-    { key: 'has_expiry', label: 'Has Expiry', icon: 'calendar-outline' },
 ];
 
 // ─── EMPTY PRODUCT FORM ────────────────────────
@@ -165,8 +164,6 @@ export default function InventoryScreen({ navigation }) {
     // Filters & Search
     const [activeFilter, setActiveFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
-    const [filterDate, setFilterDate] = useState('');
-    const [showFilterDate, setShowFilterDate] = useState(false);
 
     // Modal
     const [modalVisible, setModalVisible] = useState(false);
@@ -242,8 +239,6 @@ export default function InventoryScreen({ navigation }) {
             });
         } else if (activeFilter === 'zero_stock') {
             result = result.filter((p) => (p.quantity ?? p.stock ?? 0) === 0);
-        } else if (activeFilter === 'has_expiry') {
-            result = result.filter((p) => !!p.expiry_date);
         }
 
         // Apply search
@@ -256,23 +251,8 @@ export default function InventoryScreen({ navigation }) {
             );
         }
 
-        // Apply date filter
-        if (filterDate) {
-            result = result.filter(p => {
-                const dateToUse = p.updatedAt || p.createdAt;
-                if (!dateToUse) return false;
-                const pDate = new Date(dateToUse);
-                const pDateStr = [
-                    pDate.getFullYear(),
-                    String(pDate.getMonth() + 1).padStart(2, '0'),
-                    String(pDate.getDate()).padStart(2, '0')
-                ].join('-');
-                return pDateStr === filterDate;
-            });
-        }
-
         setFilteredProducts(result);
-    }, [products, activeFilter, searchQuery, filterDate]);
+    }, [products, activeFilter, searchQuery]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -778,8 +758,6 @@ export default function InventoryScreen({ navigation }) {
 
     const zeroStockCount = products.filter((p) => (p.quantity ?? p.stock ?? 0) === 0).length;
 
-    const hasExpiryCount = products.filter((p) => !!p.expiry_date).length;
-
     // ─── RENDER PRODUCT ROW ─────────────────────────
     const renderProduct = ({ item, index }) => {
         const stockStatus = getStockStatus(item);
@@ -923,9 +901,7 @@ export default function InventoryScreen({ navigation }) {
                                         ? expiredCount
                                         : filter.key === 'zero_stock'
                                             ? zeroStockCount
-                                            : filter.key === 'has_expiry'
-                                                ? hasExpiryCount
-                                                : products.length;
+                                            : products.length;
 
                         // Danger tabs (expired / zero_stock) get red styling
                         const isExpiredTab = filter.key === 'expired';
@@ -976,59 +952,8 @@ export default function InventoryScreen({ navigation }) {
                     })}
                 </View>
 
-                {/* Filters right side: Date & Search */}
+                {/* Filters right side: Search */}
                 <View style={[styles.filterBarRight, r.isSmall && { marginTop: SPACING.md }]} >
-
-                    {/* Date Filter */}
-                    <View style={styles.dateFilterBox}>
-                        <Ionicons name="calendar-outline" size={20} color={COLORS.textMuted} />
-                        {Platform.OS === 'web' ? (
-                            React.createElement('input', {
-                                type: 'date',
-                                value: filterDate,
-                                onChange: (e) => setFilterDate(e.target.value),
-                                style: {
-                                    flex: 1,
-                                    backgroundColor: 'transparent',
-                                    border: 'none',
-                                    outline: 'none',
-                                    fontSize: 14,
-                                    color: filterDate ? COLORS.textPrimary : COLORS.textMuted,
-                                    fontFamily: 'inherit',
-                                    cursor: 'pointer',
-                                },
-                            })
-                        ) : (
-                            <TouchableOpacity onPress={() => setShowFilterDate(true)} style={{ flex: 1, justifyContent: 'center' }}>
-                                <Text style={{ color: filterDate ? COLORS.textPrimary : COLORS.textMuted, fontSize: 14 }}>
-                                    {filterDate || 'Filter by Date'}
-                                </Text>
-                            </TouchableOpacity>
-                        )}
-                        {filterDate.length > 0 && (
-                            <TouchableOpacity onPress={() => setFilterDate('')}>
-                                <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
-                            </TouchableOpacity>
-                        )}
-                        {showFilterDate && Platform.OS !== 'web' && (
-                            <DateTimePicker
-                                value={filterDate ? new Date(filterDate) : new Date()}
-                                mode="date"
-                                display="default"
-                                onChange={(event, selectedDate) => {
-                                    setShowFilterDate(false);
-                                    if (selectedDate) {
-                                        const dateStr = [
-                                            selectedDate.getFullYear(),
-                                            String(selectedDate.getMonth() + 1).padStart(2, '0'),
-                                            String(selectedDate.getDate()).padStart(2, '0')
-                                        ].join('-');
-                                        setFilterDate(dateStr);
-                                    }
-                                }}
-                            />
-                        )}
-                    </View>
 
                     {/* Search */}
                     <View style={styles.searchBox}>
@@ -1084,8 +1009,7 @@ export default function InventoryScreen({ navigation }) {
                                     activeFilter === 'expiring_soon' ? 'time-outline' :
                                         activeFilter === 'expired' ? 'skull-outline' :
                                             activeFilter === 'zero_stock' ? 'close-circle-outline' :
-                                                activeFilter === 'has_expiry' ? 'calendar-outline' :
-                                                    'cube-outline'
+                                                'cube-outline'
                             }
                             size={56}
                             color={(activeFilter === 'expired' || activeFilter === 'zero_stock') ? COLORS.error : COLORS.border}
@@ -1100,9 +1024,7 @@ export default function InventoryScreen({ navigation }) {
                                     ? '✓ No expired products — stock is clean!'
                                     : activeFilter === 'zero_stock'
                                         ? '✓ All products have stock — nothing is empty!'
-                                        : activeFilter === 'has_expiry'
-                                            ? 'No products with expiry dates found!'
-                                            : `No ${activeFilter === 'all' ? '' : activeFilter.replace('_', ' ')} products`}
+                                        : `No ${activeFilter === 'all' ? '' : activeFilter.replace('_', ' ')} products`}
                         </Text>
                         {activeFilter === 'all' && !searchQuery && (
                             <GradientButton
